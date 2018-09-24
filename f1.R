@@ -270,4 +270,99 @@ ggplot(diamonds, aes(color, fill = cut)) +
   facet_wrap(~ clarity, nrow = 1, scales = 'free_x') +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 60))
+
+#
+
+url <- "https://cdn.rawgit.com/kjhealy/viz-organdata/master/organdonation.csv"
+organdata <- read_csv(url)
+glimpse(organdata)
+
+organdata %>% select(1:6) %>% sample_n(6)
+
+organdata %>% count(country)
+organdata %>% count(year)
+
+ggplot(organdata, aes(year, donors)) +
+  geom_line(aes(group = country)) +
+  facet_wrap(~ country)
+
+ggplot(organdata, aes(country, donors)) +
+  geom_boxplot() +
+  coord_flip()
+
+ggplot(organdata, aes(reorder(country, donors, median, na.rm = TRUE), donors)) +
+  geom_boxplot() +
+  coord_flip()
   
+ggplot(organdata, aes(reorder(country, donors, median, na.rm = TRUE), donors)) +
+  geom_violin() +
+  coord_flip()
+
+ggplot(organdata, aes(donors, 
+                      reorder(country, donors, median, na.rm = TRUE),
+                      fill = country)) +
+  geom_density_ridges() + theme_ridges() + ylab('Country') + guides(fill = FALSE)
+
+ggplot(organdata, aes(donors, 
+                      reorder(country, donors, median, na.rm = TRUE),
+                      fill = country)) +
+  geom_density_ridges() + 
+  scale_fill_viridis_d() + theme_ridges() + 
+  ylab('Country') + guides(fill = FALSE)
+
+ggplot(organdata, aes(reorder(country, donors, na.rm = TRUE),
+                      donors, color = world)) +
+  geom_point() + coord_flip() + xlab('') + theme(legend.position = 'top')
+
+ggplot(organdata, aes(reorder(country, donors, na.rm = TRUE),
+                      donors, color = world)) +
+  geom_jitter() + coord_flip() + xlab('') + theme(legend.position = 'top')
+
+ggplot(organdata, aes(reorder(country, donors, na.rm = TRUE),
+                      donors, color = world)) +
+  geom_jitter(position = position_jitter(width = .1)) + 
+  coord_flip() + xlab('') + theme(legend.position = 'top')
+
+by_country <- organdata %>% group_by(consent.law, country) %>%
+  summarize_if(is.numeric, funs(mean, sd), na.rm = TRUE) %>%
+  ungroup()
+
+
+ggplot(by_country, aes(donors_mean, reorder(country, donors_mean, na.rm = TRUE), 
+                       color = consent.law)) +
+  geom_point(size = 3) + labs(y = 'Country', color = 'Consent law') + 
+  theme(legend.position = 'top')
+
+ggplot(by_country, aes(donors_mean, 
+                       reorder(country, donors_mean, na.rm = TRUE))) +
+  geom_point(size = 3) + labs(y = 'Country') +
+  facet_wrap(~ consent.law, nrow = 2)
+
+
+ggplot(by_country, aes(reorder(country, donors_mean, na.rm = TRUE), donors_mean)) +
+  geom_pointrange(aes(ymin = donors_mean - donors_sd, ymax = donors_mean + donors_sd)) +
+  coord_flip() + labs(x = 'Country', y = 'Donor Procurement Rate')
+
+# Plot text directly
+
+ggplot(by_country, aes(roads_mean, donors_mean)) +
+  geom_point() + geom_text(aes(label = country))
+
+ggplot(by_country, aes(roads_mean, donors_mean)) +
+  geom_text(aes(label = country))
+
+library(ggrepel)
+ggplot(by_country, aes(roads_mean, donors_mean)) +
+  geom_point() + geom_text_repel(aes(label = country))
+
+# Label outliers
+# Sometimes we want to pick out some points of interest 
+# in the data without labeling every single item
+
+ggplot(by_country, aes(gdp_mean, health_mean)) +
+  geom_point() +
+  geom_text_repel(data = subset(by_country, gdp_mean > 25000), 
+                  aes(label = country))
+
+
+
