@@ -257,3 +257,17 @@ ggplot(aes(x = price, y = factor(carat_round), fill = factor(carat_round))) +
   scale_fill_brewer(palette = 4) +
   theme_ridges() + theme(legend.position = 'none')
 
+ggplot(diamonds, aes(color, fill = clarity)) + 
+  geom_bar()
+
+ggplot(diamonds, aes(color, fill = cut)) + 
+  geom_bar(position = 'dodge2')
+
+ggplot(diamonds, aes(color, fill = cut)) + 
+  geom_bar(position = 'dodge2') + 
+  coord_flip() +
+  scale_fill_brewer(palette = 5) +
+  facet_wrap(~ clarity, nrow = 1, scales = 'free_x') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 60))
+  
