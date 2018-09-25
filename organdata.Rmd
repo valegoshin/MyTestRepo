@@ -1,0 +1,169 @@
+---
+title: "Visual"
+author: "Valerie Egoshin"
+date: "9/25/2018"
+output: 
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
+    fig_caption: yes
+    fig_width: 6
+    fig_height: 4
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(ggrepel)
+library(ggridges)
+
+```
+
+## Some examples from data about organ donors
+
+[from](https://socviz.co/workgeoms.html)
+
+**organdata** contains a little more than a decade’s worth of information on the donation of organs for transplants in seventeen OECD countries.   
+The organ procurement rate is a measure of the number of human organs obtained from cadaver organ donors for use in transplant operations.   
+Along with this donation data, the dataset has a variety of numerical demographic measures, and several categorical measures of health and welfare policy and law
+
+### Data import
+
+```{r data_import}
+url <- "https://cdn.rawgit.com/kjhealy/viz-organdata/master/organdonation.csv"
+organdata <- read_csv(url)
+glimpse(organdata)
+
+```
+
+### Some data results
+
+```{r res}
+organdata %>% select(1:6) %>% sample_n(6)
+
+organdata %>% count(country)
+organdata %>% count(year)
+```
+
+### Donors by country
+
+boxplot
+
+```{r fig1, fig.cap='Donors by country - boxplot'}
+ggplot(organdata, aes(reorder(country, donors, na.rm = TRUE), donors)) +
+  geom_boxplot() +
+  coord_flip() + xlab('')
+
+```
+
+#### `ggridges::geom_density_ridges`
+
+```{r fig2, fig.cap='Donors by country - density_ridges'}
+ggplot(organdata, aes(donors, reorder(country, donors, na.rm = TRUE),
+                      fill = country)) +
+  geom_density_ridges() + theme_ridges() + ylab('') + guides(fill = FALSE)
+
+```
+
+#### `geom_jitterposition = position_jitter(width = .1)`
+
+```{r fig3, fig.cap='Donors by country - geom_jitter'}
+ggplot(organdata, aes(reorder(country, donors, na.rm = TRUE),
+                      donors, color = world)) +
+  geom_jitter(position = position_jitter(width = .1)) + 
+  coord_flip() + xlab('') + theme(legend.position = 'top')
+
+```
+
+### Summary data
+
+```{r summary_data}
+by_country <- organdata %>% group_by(consent.law, country) %>%
+  summarize_if(is.numeric, funs(mean, sd), na.rm = TRUE) %>%
+  ungroup()
+
+by_country %>% sample_n(6)
+```
+
+## Consent law
+
+#### `geom_point`
+
+```{r fig4, fig.cap='Mean donors by country. Procurement Rate'}
+ggplot(by_country, aes(donors_mean, reorder(country, donors_mean, na.rm = TRUE), 
+                       color = consent.law)) +
+  geom_point(size = 3) + labs(y = 'Country', color = 'Consent law') + 
+  theme(legend.position = 'top')
+
+```
+
+#### `facet_wrap`
+
+```{r fig5, fig.width=7, fig.cap='Mean donors by country. Procurement Rate'}
+ggplot(by_country, aes(donors_mean, 
+                       reorder(country, donors_mean, na.rm = TRUE))) +
+  geom_point(size = 3) + labs(y = 'Country') +
+  facet_wrap(~ consent.law, nrow = 1)
+```
+
+#### `geom_pointrange`
+
+```{r fig6, fig.cap='Mean donors by country. Procurement Rate'}
+ggplot(by_country, aes(reorder(country, donors_mean, na.rm = TRUE), donors_mean)) +
+  geom_pointrange(aes(ymin = donors_mean - donors_sd, ymax = donors_mean + donors_sd)) +
+  coord_flip() + 
+  labs(x = 'Country', y = 'Donor Procurement Rate')
+
+```
+
+## Plot text directly
+
+#### `ggrepel::geom_text_repel`
+
+```{r fig7, fig.cap='Road_donors' }
+ggplot(by_country, aes(roads_mean, donors_mean)) +
+  geom_point() + geom_text_repel(aes(label = country))
+
+```
+
+### Label outliers
+
+Sometimes we want to pick out some points of interest in the data without labeling every single item
+
+```{r fig8, fig.cap='GDP_Health, countries w/ GDP > 25000'}
+ggplot(by_country, aes(gdp_mean, health_mean)) +
+  geom_point() +
+  geom_text_repel(data = subset(by_country, gdp_mean > 25000), 
+                  aes(label = country))
+
+```
+
+## Write and draw in the plot area
+
+
+```{r fig9, fig.cap='roads and donors'}
+ggplot(organdata, aes(roads, donors)) +
+  geom_point() +
+  annotate(geom = 'text', x = 91, y = 33,
+           label = 'A suprisingly high \n recovery rate',
+           hjust = 0) +
+  annotate(geom = 'text', x = 150, y = 7,
+           label = 'A suprisingly low \n recovery rate',
+           hjust = 0)
+```
+
+The `annotate()` function can work with other geoms, too. Use it to draw rectangles, line segments, and arrows. Just remember to pass along the right arguments to the geom you use. We can add a rectangle to this plot, for instance, with a second call to the function
+
+```{r fig10, fig.cap='roads and donors - rect area'}
+ggplot(organdata, aes(roads, donors)) +
+  geom_point() +
+  annotate(geom = 'rect', xmin = 125, xmax = 155,
+           ymin = 31, ymax = 35, fill = 'red', alpha = .2) +
+  annotate(geom = 'text', x = 81, y = 33,
+           label = 'A suprisingly high \n recovery rate',
+           hjust = 0)
+```
+
+
