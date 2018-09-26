@@ -1,0 +1,134 @@
+---
+title: "Label line ends in time series"
+author: "Valerie Egoshin"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    df_print: paged
+    css: ../../common_files/style3.css
+    toc: yes
+    toc_float: yes
+    fig_caption: yes
+    fig_width: 6
+    fig_height: 4
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+ 
+#### Label line ends in time series with ggplot2
+
+
+From [r-blogger](https://www.r-bloggers.com/label-line-ends-in-time-series-with-ggplot2/) or [original](https://drsimonj.svbtle.com/label-line-ends-in-time-series-with-ggplot2)
+
+
+### Data
+
+The Orange data frame has 35 rows and 3 columns of records of the growth of orange trees. 
+
+* Tree
+    * an ordered factor indicating the tree on which the measurement is made. The ordering is according to increasing maximum diameter.
+* age
+    * a numeric vector giving the age of the tree (days since 1968/12/31)
+* circumference
+    * a numeric vector of trunk circumferences (mm). This is probably “circumference at breast height”, a standard measurement in forestry.
+
+
+```{r data_}
+d <- Orange
+sample_n(d, 6)
+
+count(d, Tree)
+
+```
+
+
+### Template code
+To create the basic case where the numbers appear at the end of your time series lines, your code might look something like this:
+
+
+```{r template, eval=FALSE}
+# You have a data set with:
+# - GROUP colum
+# - X column (say time)
+# - Y column (the values of interest)
+DATA_SET
+
+# Create a vector of the last (furthest right) y-axis values for each group
+DATA_SET_ENDS <- DATA_SET %>% 
+  group_by(GROUP) %>% 
+  top_n(1, X) %>% 
+  pull(Y)
+
+# Create plot with `sec.axis`
+ggplot(DATA_SET, aes(X, Y, color = GROUP)) +
+    geom_line() +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(sec.axis = sec_axis(~ ., breaks = DATA_SET_ENDS))
+
+```
+
+### Let's see it
+
+Let’s break it down a bit. We already have our data set where the group colum is Tree, the X value is age, and the Y value is circumference.
+
+`dplyr::pull` - The default returns the last column (on the assumption that's the column you've created most recently)
+
+```{r template_result}
+# So first get a vector of the last (furthest right) values for each group:
+d_ends <- d %>% 
+  group_by(Tree) %>% 
+  top_n(1, age) %>% 
+  pull(circumference) 
+
+d_ends 
+
+```
+
+### Basic plot
+
+```{r fig1, fig.cap='Basic view'}
+ggplot(d, aes(age, circumference, color = Tree)) +
+      geom_line()
+
+```
+
+<br>
+Now we can use `scale_y_*`, with the argument `sec.axis` to create a `second axis` on the right, with numbers to be displayed at breaks, defined by our vector of line ends:
+
+```{r fig2, fig.cap='Basic plot plus second axis on the right'}
+ggplot(d, aes(age, circumference, color = Tree)) +
+      geom_line() +
+      scale_y_continuous(sec.axis = sec_axis(~ ., breaks = d_ends))
+
+```
+
+The only major addition I suggest is expanding the margins of the `x-axis` so the gap disappears. You do this with `scale_x_*` and the `expand` argument:
+
+```{r fig3, fig.cap='Some improvements'}
+ggplot(d, aes(age, circumference, color = Tree)) +
+      geom_line() +
+      scale_y_continuous(sec.axis = sec_axis(~ ., breaks = d_ends)) +
+      scale_x_continuous(expand = c(0, 0))
+
+```
+
+### Polishing it up
+
+```{r fig4, fig.cap="Final plot"}
+d %>% 
+  ggplot(aes(age, circumference, color = Tree)) +
+    geom_line(size = 2, alpha = .8) +
+    theme_minimal() +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(sec.axis = sec_axis(~ ., breaks = d_ends)) +
+    ggtitle("Orange trees getting bigger with age",
+            subtitle = "Based on the Orange data set in R") +
+    labs(x = "Days old", y = "Circumference (mm)", caption = "Plot by @drsimonj")
+
+```
+
