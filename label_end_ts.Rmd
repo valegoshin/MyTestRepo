@@ -11,7 +11,7 @@ output:
     fig_caption: yes
     fig_width: 6
     fig_height: 4
-    code_folding: hide
+   
 ---
 
 ```{r setup, include=FALSE}
@@ -131,4 +131,15 @@ d %>%
     labs(x = "Days old", y = "Circumference (mm)", caption = "Plot by @drsimonj")
 
 ```
+
+
+<br>
+
+#### Session Info
+
+```{r session_info, include=TRUE, echo=TRUE, results='markup'}
+devtools::session_info()
+
+```
+
 
