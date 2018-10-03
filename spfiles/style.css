@@ -1,4 +1,3 @@
-body { font-family: 'Lato', 'Palatino Linotype', 'Book Antiqua', Palatino, 'Microsoft YaHei', 'Songti SC', serif; }
-h1, h2, h3 { font-family: 'Yanone Kaffeesatz'; }
+body { font-family: 'Lato', 'Palatino Linotype', 'Book Antiqua', Palatino, 'Microsoft YaHei', 'Songti SC', serif; font-size: 1.4em;}
+h1, h2, h3, h4 { font-family: 'Yanone Kaffeesatz'; }
 .remark-code, .remark-inline-code { font-family: 'Inconsolata', 'Lucida Console', Monaco, monospace; color: #88398A}
-/* p { color: blue; font-family:helvetica;} */
