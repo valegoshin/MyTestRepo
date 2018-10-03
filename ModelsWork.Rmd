@@ -1,0 +1,427 @@
+---
+title: "Work with Models"
+author: "Valerie Egoshin"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    df_print: paged
+    css: spfiles/style.css
+    toc: yes
+    toc_float: no
+    fig_caption: yes
+    fig_width: 6
+    fig_height: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(broom)
+
+# function by Jeromy Anglim 
+round_df <- function(x, digits=2) {
+    # round all numeric variables
+    # x: data frame 
+    # digits: number of digits to round
+    # numeric_columns <- sapply(x, mode) == 'numeric'
+    numeric_columns <- sapply(x, is.numeric)
+    x[numeric_columns] <-  round(x[numeric_columns], digits)
+    x
+}
+
+```
+
+Data visualization is about more than generating figures that display the raw numbers from a table of data. Right from the beginning, it involves summarizing or transforming parts of the data, and then plotting the results. 
+
+**Statistical models are a central part of that process.**
+
+[from](https://socviz.co/modeling.html)
+
+#### Data
+
+```{r}
+gapminder <- gapminder::gapminder
+glimpse(gapminder)
+
+```
+
+### Some graphics
+
+from the smoothing lines we drew from almost the very first plots we made, we have seen that `stat_` functions can do a fair amount of calculation and even model estimation on the fly. The `geom_smooth()` function can take a range of method arguments to fit `LOESS`, `OLS`, and `robust regression` lines, amongst others.
+
+access the `MASS` library’s `rlm` function to fit a **robust regression** line
+
+```{r fig1, fig.cap='Fig.1 Robust Linear Model'}
+p <- ggplot(gapminder, aes(log(gdpPercap), lifeExp))
+
+p + geom_point(alpha = .1) +
+  geom_smooth(color = 'tomato', fill = 'tomato', method = MASS::rlm) +
+  geom_smooth(color = 'steelblue', full = 'steelblue', method = 'lm')
+
+```
+
+the `bs` function is invoked directly from the `splines` library in the same way, to fit a polynominal curve to the data
+
+```{r fig2, fig.cap='Fig.2 Polynomial Splines Model'}
+p + geom_point(alpha = .1) +
+  geom_smooth(color = 'tomato', method = 'lm', size = 1.2,
+              formula = y ~ splines::bs(x, 3), se = FALSE)
+  
+
+```
+
+The `geom_quantile()` function, meanwhile, is like a specialized version of `geom_smooth()` that can fit **quantile regression** lines using a variety of methods. The `quantiles` argument takes a vector specifying the quantiles at which to fit the lines
+
+```{r fig3, fig.cap='Fig.3 Quantile Regression Model'}
+p + geom_point(alpha = .1) +
+  geom_quantile(color = 'tomato', method = 'rqss', size = 1.2,
+              lambda = 1, quantiles = c(.2, .5, .85))
+
+```
+
+### Show several fits at once, with a legend
+
+we can look at several fits at once on the same plot by layering on new smoothers with `geom_smooth()`. 
+
+
+
+
+```{r brewer_pal}
+model_colors <- RColorBrewer::brewer.pal(3, "Set1")
+# model_colors
+
+```
+
+```{r fig4, fig.cap='Fig.4 Different models with one legend'}
+p + geom_point(alpha = .2) +
+  geom_smooth(method = 'lm', aes(color = 'OLS', fill = 'OLS')) +
+  geom_smooth(method = 'lm', formula = y ~ splines::bs(x, df = 3),
+              aes(color = 'Cubic spline', fill = 'Cubic spline')) +
+  geom_smooth(method = 'loess', aes(color = 'Loess', fill = 'Loess')) +
+  scale_color_manual(name = 'Models', values = model_colors) +
+  scale_fill_manual(name = 'Models', values = model_colors) +
+  theme(legend.position = 'top')
+
+```
+
+### Look inside model objects
+
+
+```{r lm_}
+out <- lm(lifeExp ~ gdpPercap + pop + continent, gapminder)
+summary(out)
+
+```
+
+
+```{r coef_conf}
+cbind(coef(out), confint(out)) %>% round_df() %>% pander::pander()
+
+```
+
+
+```{r tidy_glance}
+tidy(out, conf.int = TRUE)
+glance(out)
+
+```
+
+### Generate predictions to graph
+
+The `predict()` function is a generic way of using model objects to produce this kind of prediction.
+
+For `predict()` to calculate the new values for us, it needs some new data to fit the model to. We will generate a new data frame whose columns have the same names as the variables in the model’s original data, but where the rows have new values. 
+
+A very useful function called `expand.grid()` will help us do this. We will give it a list of variables, specifying the range of values we want each variable to take. Then `expand.grid()` will generate the will multiply out the full range of values for all combinations of the values we give it, thus creating a new data frame with the new data we need.   
+__The function calculates the cartesian product of the variables given to it.__
+
+```{r pr_1}
+min_gdp <- min(gapminder$gdpPercap)
+max_gdp <- max(gapminder$gdpPercap)
+med_pop <- median(gapminder$pop)
+
+pred_df <- expand.grid(gdpPercap = (seq(from = min_gdp,
+                                        to = max_gdp,
+                                        length.out = 100)),
+                       pop = med_pop,
+                       continent = c("Africa", "Americas",
+                                     "Asia", "Europe", "Oceania"))
+
+dim(pred_df)
+sample_n(pred_df, 6)
+
+```
+
+Now we can use `predict()`. If we give the function our new data and model, without any further argument, it will calculate the fitted values for every row in the data frame. If we specify `interval = 'predict'` as an argument, it will calculate 95% prediction intervals in addition to the point estimate.
+
+
+```{r pr_2}
+pred_out <- predict(object = out,
+                    newdata = pred_df,
+                    interval = "predict")
+head(pred_out)
+```
+
+Because we know that, by construction, the cases in `pred_df` and `pred_out` correspond row for row, we can bind the two data frames together by column. This method of joining or merging tables is definitely not recommended when you are dealing with data.
+
+```{r pr_3}
+pred_df <- cbind(pred_df, pred_out)
+sample_n(pred_df, 6) 
+
+```
+
+The end result is a tidy data frame, containing the predicted values from the model for the range of values we specified. Now we can plot the results. Because we produced a full range of predicted values, we can decide whether or not to use all of them. Here we further subset the predictions to just those for Europe and Africa
+
+```{r pr_4, fig.cap='Fig5. Prediction'}
+ggplot(data = subset(pred_df, continent %in% c('Africa', 'Europe')), 
+       aes(x = gdpPercap, 
+           y = fit, ymin = lwr, ymax = upr,
+           color = continent, 
+           fill = continent,
+           group = continent)) +
+  geom_point(data = subset(gapminder, continent %in% c('Africa', 'Europe')),
+             aes(x = gdpPercap, y = lifeExp, color = continent),
+             alpha = .5, inherit.aes = FALSE) +
+  geom_line() +
+  geom_ribbon(alpha = .2, color = FALSE) +
+  scale_x_log10(labels = scales::dollar)
+
+```
+
+
+## Tidy model objects with broom
+
+The `predict` method is very useful, but there are a lot of other things we might want to do with our model output. We will use David Robinson’s `broom` package to help us out.  
+
+It is a library of functions that help us get from the model results that R generates to numbers that we can plot. It will take model objects and turn pieces of them into data frames that you can use easily with ggplot
+
+
+### Get component-level statistics with tidy()
+
+The `tidy()` function takes a model object and returns a data frame of component-level information.
+
+```{r broom_1}
+out_comp <- tidy(out)
+out_comp %>% round_df(3)
+
+```
+
+We are now able to treat this data frame just like all the other data that we have seen so far
+
+```{r broom_2, fig.cap='Fig.6 tidy using'}
+ggplot(out_comp, aes(term, estimate)) + geom_point() + coord_flip()
+
+```
+
+We can extend and clean up this plot in a variety of ways. For example, we can tell `tidy()` to calculate confidence intervals for the estimates, using R’s `conf.int()` function.
+
+```{r broom_3}
+out_comp <- tidy(out, conf.int = TRUE)
+out_comp %>% round_df(3)
+
+```
+
+
+
+```{r broom_4, fig.cap='Fig.7 pointrange'}
+out_comp %>% slice(4:7) %>% 
+  mutate(niceterm = str_remove(term, 'continent')) %>% 
+  ggplot(aes(reorder(niceterm, estimate), estimate)) +
+  geom_pointrange(aes(ymin = conf.low, ymax = conf.high)) + coord_flip() + xlab('')
+
+
+```
+
+### Get observation-level statistics with augment()
+
+The values returned by `augment()` are all statistics calculated at the level of the original observations. As such, they can be added on to the data frame that the model is based on. Working from a call to `augment()` will return a data frame with all the original observations used in the estimation of the model, together with columns like the following:
+
+* .fitted — The fitted values of the model.
+* .se.fit — The standard errors of the fitted values.
+* .resid — The residuals.
+* .hat — The diagonal of the hat matrix.
+* .sigma — An estimate of residual standard deviation when the corresponding observation is dropped from the model.
+* .cooksd — Cook’s distance, a common regression diagnostic; and
+* .std.resid — The standardized residuals.
+
+```{r augment_1}
+out_aug <- augment(out)
+sample_n(out_aug, 6) %>% round_df(2)
+
+```
+
+```{r augment_2}
+out_aug <- augment(out, data = gapminder)
+head(out_aug) %>% round_df()
+
+```
+
+The new columns created by `augment()` can be used to create some standard regression plots. For example, we can plot the residuals versus the fitted values. 
+
+```{r augment_3, fig.cap='Fig.8 Augment plot'}
+ggplot(out_aug, aes(.fitted, .resid)) + geom_point()
+
+```
+
+### Get model-level statistics with glance()
+
+This function organizes the information typically presented at the bottom of a model’s `summary()` output. The real power of `broom’s` approach is the way that it can scale up to cases where we are grouping or subsampling our data.
+
+```{r glance_1}
+glance(out) %>% round_df()
+
+```
+
+Broom is able to `tidy` (and `augment`, and `glance` at) a wide range of model types. Not all functions are available for all classes of model. Consult broom’s documentation for more details on what is available. 
+
+For example, here is a plot created from the tidied output of an event-history analysis. First we generate a Cox proportional hazards model of some survival data.
+
+```{r glance_2}
+library(survival)
+
+out_cph <- coxph(Surv(time, status) ~ age + sex, data = lung)
+out_surv <- survfit(out_cph)
+
+
+```
+
+in the first step the `Surv()` function creates the response or outcome variable for the proportional hazards model that is then fitted by the `coxph()` function. 
+
+Then the `survfit()` function creates the survival curve from the model, much like we used `predict()` to generate predicted values earlier. 
+
+Try `summary(out_cph)` to see the model, and `summary(out_surv)` to see the table of predicted values that will form the basis for our plot. 
+
+Next we tidy out_surv to get a data frame, and plot it.
+
+```{r glance_3, fig.cap='Fig.9 Survival tidy'}
+summary(out_cph)
+# summary(out_surv)
+
+out_tidy <- tidy(out_surv)
+out_tidy %>% round_df()
+
+ggplot(data = out_tidy, mapping = aes(time, estimate)) +
+  geom_line() +
+  geom_ribbon(mapping = aes(ymin = conf.low, ymax = conf.high), alpha = .2)
+
+```
+
+## Grouped analysis and list columns
+
+Broom makes it possible to quickly fit models to different subsets of your data and get consistent and usable tables of results out the other end.
+
+```{r eu77}
+eu77 <- gapminder %>% filter(continent == 'Europe', year == 1977)
+
+sample_n(eu77, 6)
+
+```
+
+We could then see what the relationship between life expectancy and GDP looked like for that continent-year group
+
+```{r group_1}
+fit <- lm(lifeExp ~ log(gdpPercap), data = eu77)
+summary(fit)
+
+```
+
+With `dplyr` and `broom` we can do this for every continent-year slice of the data in a compact and tidy way
+
+```{r group_2}
+gapminder %>% 
+  filter(continent != 'Oceania') %>% 
+  group_by(year, continent) %>% 
+  do(tidy(lm(lifeExp ~ log(gdpPercap), .), conf.int = TRUE)) %>% 
+  head() %>% round_df()
+  
+```
+
+
+
+```{r group_3, fig.width=8, fig.cap='Fig.10 Estimate'}
+gapminder %>% 
+  filter(continent != 'Oceania') %>% 
+  group_by(year, continent) %>% 
+  do(tidy(lm(lifeExp ~ log(gdpPercap), .), conf.int = TRUE)) %>% 
+  filter(term != '(Intercept)') %>% 
+  ggplot(aes(year, estimate,
+             ymin = conf.low,
+             ymax = conf.high,
+             group = continent, color = continent)) +
+  geom_pointrange(position = position_dodge2(width = 2)) +
+  scale_x_continuous(breaks = unique(gapminder$year)) +
+  theme(legend.position = 'top') +
+  labs(x = 'Year', y = 'Estimate', color = 'Continent')
+
+
+
+```
+
+### Plot marginal effects
+
+Our earlier discussion of `predict()` was about obtaining estimates of the average effect of some coefficient, net of the other terms in the model.    
+Over the past decade, estimating and plotting _partial_ or _marginal_ effects from a model has become an increasingly common way of presenting accurate and interpretively useful predictions.    
+Interest in marginal effects plots was stimulated by the realization that the interpretation of terms in logistic regression models.
+
+```{r margins_1}
+library(margins)
+
+cdc <- read.csv('../../common_files/cdc.csv')
+glimpse(cdc)
+```
+
+```{r margins_2}
+cdc$genhlth <- relevel(cdc$genhlth, ref = 'good')
+
+out_la <- glm(hlthplan ~ genhlth + age + gender, cdc, family = 'binomial')
+
+summary(out_la)
+
+cbind(exp(coef(out_la)), exp(confint(out_la))) %>% round_df() %>% pander::pander() 
+
+tidy(out_la, conf.int = TRUE) %>% round_df()
+glance(out_la)
+```
+
+The summary reports the coefficients and other information. We can now graph the data in any one of several ways. 
+
+Using `margins()` we calculate the marginal effects for each variable:
+
+```{r margins_3}
+m_la <- margins(out_la)
+summary(m_la)
+
+```
+
+```{r  margins_4, fig.cap='Fig.11 margins plot method'}
+plot(m_la)
+# cplot(m_la)
+# image(m_la)
+```
+
+```{r margins_5}
+
+la_m <- as.tibble(summary(m_la))
+la_m %>% select(factor, AME, lower, upper) %>% arrange(AME) %>% round_df()
+```
+
+
+```{r  margins_6, fig.cap='Fig.12 Average Marginal Effect Plot'}
+ggplot(la_m, aes(reorder(factor, AME), AME)) +
+  geom_hline(yintercept = 0, color = 'grey80') +
+  geom_pointrange(aes(ymin = lower, ymax = upper)) +
+  coord_flip() +
+  labs(x = '', y = 'Average Marginal Effect')
+
+```
+
+<br>
+
+#### Session Info
+
+```{r session_info, include=TRUE, echo=TRUE, results='markup'}
+devtools::session_info()
+
+```
+
+
